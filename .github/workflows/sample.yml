@@ -1,7 +1,7 @@
 name: Sample Workflow
 on: 
   push:
-    branches: [ master ]  
+    branches: [ main ]  
 jobs:
   hello:
     runs-on: ubuntu-latest
