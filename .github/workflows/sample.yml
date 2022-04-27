@@ -1,7 +1,9 @@
 name: Sample Workflow
 on: 
   push:
-    branches: [ main ]  
+    branches: [ main ]
+env:
+  audience: EY
 jobs:
   hello:
     runs-on: ubuntu-latest
@@ -12,6 +14,9 @@ jobs:
         run: |
           node -v
           npm -v
+      - name: Say hello
+        run: echo "Hello $audience"
+        
   github-actions-variables:
     runs-on: ubuntu-latest
     steps:
