@@ -1,9 +1,14 @@
 name: Sample Workflow
-on: [push]
-  
+on: 
+  push:
+    branches: [ master ]  
 jobs:
   hello:
     runs-on: ubuntu-latest
     steps:
       - name: hello script
         run: echo "hello"
+      - name: check the node-version
+        run: |
+          node -v
+          npm -v
