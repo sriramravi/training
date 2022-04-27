@@ -12,3 +12,8 @@ jobs:
         run: |
           node -v
           npm -v
+  github-actions-variables:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "This job is triggered by ${{ github.event_name }}"
+        
