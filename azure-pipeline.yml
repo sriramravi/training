@@ -1,4 +1,3 @@
-# .azure-pipelines/ci-cd.yml
 trigger:
   branches:
     include:
@@ -64,16 +63,22 @@ stages:
     # Create a compose override that:
     # 1) sets the ACR-qualified image names for frontend/backend
     # 2) overrides the build arg for the frontend API URL (baked at build time)
-    
+
+    # FIX 1: Export imageTag as an ADO pipeline variable so subsequent steps can read it
+    # FIX 3: Actually pass frontendApiUrl as a build arg in the override (was missing before)
     - bash: |
         set -euo pipefail
         imageTag="$(date -u +'%d%m%H%M')"
+        echo "##vso[task.setvariable variable=imageTag]$imageTag"
         cat > docker-compose.override.ci.yml <<YAML
         services:
           frontend:
-            image: $(acrLoginServer)/$(frontendImageName):$(imageTag)
+            image: $(acrLoginServer)/$(frontendImageName):${imageTag}
+            build:
+              args:
+                NEXT_PUBLIC_API_URL: "${{ parameters.frontendApiUrl }}"
           backend:
-            image: $(acrLoginServer)/$(backendImageName):$(imageTag)
+            image: $(acrLoginServer)/$(backendImageName):${imageTag}
         YAML
         echo "Resolved compose config (sanity check):"
         docker compose -f $(composeFile) -f docker-compose.override.ci.yml config
@@ -92,17 +97,24 @@ stages:
         docker compose -f $(composeFile) -f docker-compose.override.ci.yml push frontend backend
       displayName: "docker compose push (frontend, backend)"
 
-    # Export the full image names to the next stage
+    # FIX 2: Export the full image names as output variables so the Deploy stage can consume them
     - bash: |
+        echo "##vso[task.setvariable variable=frontendFullImage;isOutput=true]$(acrLoginServer)/$(frontendImageName):$(imageTag)"
+        echo "##vso[task.setvariable variable=backendFullImage;isOutput=true]$(acrLoginServer)/$(backendImageName):$(imageTag)"
         echo "Frontend image: $(acrLoginServer)/$(frontendImageName):$(imageTag)"
         echo "Backend image:  $(acrLoginServer)/$(backendImageName):$(imageTag)"
       displayName: "Expose image names"
+      name: ExposeImageNames
 
 # ============================== DEPLOY (OPTIONAL) ==============================
 - stage: Deploy
   displayName: "Deploy images to Web Apps"
   dependsOn: Build_Push
   condition: and(succeeded(), eq('${{ parameters.deployNow }}', 'true'))
+  # FIX 2 (cont): Consume the output variables from the Build_Push stage
+  variables:
+    frontendFullImage: $[ stageDependencies.Build_Push.BuildPush.outputs['ExposeImageNames.frontendFullImage'] ]
+    backendFullImage:  $[ stageDependencies.Build_Push.BuildPush.outputs['ExposeImageNames.backendFullImage'] ]
   jobs:
   - job: DeployWebApps
     displayName: "Set container images on Web Apps"
