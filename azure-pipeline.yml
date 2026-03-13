@@ -1,0 +1,164 @@
+# .azure-pipelines/ci-cd.yml
+trigger:
+  branches:
+    include:
+      - main
+
+# Manual toggles & inputs
+parameters:
+- name: deployNow
+  displayName: "Deploy to Web Apps after push?"
+  type: boolean
+  default: false
+- name: frontendApiUrl
+  displayName: "NEXT_PUBLIC_API_URL for frontend (no trailing slash)"
+  type: string
+  default: "https://smart-bear.azurewebsites.net"
+
+variables:
+  # -------- Edit these to match your environment --------
+  azureServiceConnection: 'azure-scp'                 # Azure RM service connection name
+  resourceGroup: 'smartr-bear-rg'
+  acrName: 'smartrbearreg'
+  acrLoginServer: 'smartrbearreg.azurecr.io'
+
+  # Use clear repo names in ACR
+  frontendImageName: 'core-frontend'
+  backendImageName: 'core-backend'
+
+  # Your compose file path
+  composeFile: 'docker-compose.prod.yml'
+
+  # Web Apps for Containers (Linux)
+  frontendWebApp: 'smart-bear'
+  backendWebApp: 'smrtr-bear-backend'
+
+  # If you use ACR admin credentials, add these as secret variables in the pipeline UI
+  # ACR_USERNAME: (secret)
+  # ACR_PASSWORD: (secret)
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+# ============================== BUILD & PUSH ==============================
+- stage: Build_Push
+  displayName: "Build & Push images to ACR"
+  jobs:
+  - job: BuildPush
+    displayName: "Compose build (frontend, backend), tag, push"
+    steps:
+    - checkout: self
+      clean: true
+
+    - task: AzureCLI@2
+      displayName: "Login to Azure & ACR"
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          az acr login --name $(acrName)
+
+    # Create a compose override that:
+    # 1) sets the ACR-qualified image names for frontend/backend
+    # 2) overrides the build arg for the frontend API URL (baked at build time)
+    
+    - bash: |
+        set -euo pipefail
+        imageTag="$(date -u +'%d%m%H%M')"
+        cat > docker-compose.override.ci.yml <<YAML
+        services:
+          frontend:
+            image: $(acrLoginServer)/$(frontendImageName):$(imageTag)
+          backend:
+            image: $(acrLoginServer)/$(backendImageName):$(imageTag)
+        YAML
+        echo "Resolved compose config (sanity check):"
+        docker compose -f $(composeFile) -f docker-compose.override.ci.yml config
+      displayName: "Generate ACR override (image names + build arg)"
+
+    # Build ONLY the two app images (skip nginx)
+    - bash: |
+        set -euo pipefail
+        echo "Building images (frontend, backend)…"
+        docker compose -f $(composeFile) -f docker-compose.override.ci.yml build frontend backend
+      displayName: "docker compose build (frontend, backend)"
+
+    - bash: |
+        set -euo pipefail
+        echo "Pushing images to ACR…"
+        docker compose -f $(composeFile) -f docker-compose.override.ci.yml push frontend backend
+      displayName: "docker compose push (frontend, backend)"
+
+    # Export the full image names to the next stage
+    - bash: |
+        echo "Frontend image: $(acrLoginServer)/$(frontendImageName):$(imageTag)"
+        echo "Backend image:  $(acrLoginServer)/$(backendImageName):$(imageTag)"
+      displayName: "Expose image names"
+
+# ============================== DEPLOY (OPTIONAL) ==============================
+- stage: Deploy
+  displayName: "Deploy images to Web Apps"
+  dependsOn: Build_Push
+  condition: and(succeeded(), eq('${{ parameters.deployNow }}', 'true'))
+  jobs:
+  - job: DeployWebApps
+    displayName: "Set container images on Web Apps"
+    steps:
+    - task: AzureCLI@2
+      displayName: "Update Frontend & Backend Web Apps"
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -euo pipefail
+          FRONTEND_IMAGE="$(frontendFullImage)"
+          BACKEND_IMAGE="$(backendFullImage)"
+
+          echo "Deploying:"
+          echo "  Frontend -> $(frontendWebApp) : ${FRONTEND_IMAGE}"
+          echo "  Backend  -> $(backendWebApp)  : ${BACKEND_IMAGE}"
+
+          # -------- OPTION A: ACR admin credentials (simple) --------
+          if [[ -n "${ACR_USERNAME:-}" && -n "${ACR_PASSWORD:-}" ]]; then
+            az webapp config container set \
+              --resource-group "$(resourceGroup)" \
+              --name "$(frontendWebApp)" \
+              --docker-custom-image-name "${FRONTEND_IMAGE}" \
+              --docker-registry-server-url "https://$(acrLoginServer)" \
+              --docker-registry-server-user "$ACR_USERNAME" \
+              --docker-registry-server-password "$ACR_PASSWORD"
+
+            az webapp config container set \
+              --resource-group "$(resourceGroup)" \
+              --name "$(backendWebApp)" \
+              --docker-custom-image-name "${BACKEND_IMAGE}" \
+              --docker-registry-server-url "https://$(acrLoginServer)" \
+              --docker-registry-server-user "$ACR_USERNAME" \
+              --docker-registry-server-password "$ACR_PASSWORD"
+
+          else
+            # -------- OPTION B: Managed Identity + AcrPull (recommended) --------
+            # Assumes each Web App's managed identity already has AcrPull on your ACR.
+            az webapp config container set \
+              --resource-group "$(resourceGroup)" \
+              --name "$(frontendWebApp)" \
+              --docker-custom-image-name "${FRONTEND_IMAGE}" \
+              --docker-registry-server-url "https://$(acrLoginServer)"
+
+            az webapp config container set \
+              --resource-group "$(resourceGroup)" \
+              --name "$(backendWebApp)" \
+              --docker-custom-image-name "${BACKEND_IMAGE}" \
+              --docker-registry-server-url "https://$(acrLoginServer)"
+          fi
+
+          # Optional: restart to pull immediately
+          az webapp restart --resource-group "$(resourceGroup)" --name "$(frontendWebApp)"
+          az webapp restart --resource-group "$(resourceGroup)" --name "$(backendWebApp)"
+      env:
+        ACR_USERNAME: $(ACR_USERNAME)
+        ACR_PASSWORD: $(ACR_PASSWORD)
