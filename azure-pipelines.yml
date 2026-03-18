@@ -1,253 +1,293 @@
----
-# CheckmarxOne SAST Onboarding - Azure DevOps POC (Simulation Mode)
-# This playbook simulates the onboarding process without making actual API calls
+# azure-pipelines.yml
+# CheckmarxOne SAST Onboarding Pipeline
 
-- name: CheckmarxOne SAST Onboarding Simulation
-  hosts: localhost
-  gather_facts: yes
-  
-  vars_prompt:
-    - name: ba_number
-      prompt: "Enter BA Number"
-      private: no
-      
-    - name: as_number
-      prompt: "Enter AS Number"
-      private: no
-      
-    - name: repository
-      prompt: "Enter Repository URL"
-      private: no
-      
-    - name: group_name
-      prompt: "Enter Checkmarx Group Name"
-      private: no
+trigger: none  # Manual trigger only
 
-  tasks:
-    # --- STEP 1: NORMALIZE BA NUMBER ---
-    - name: "[SIMULATION] Normalize BA Number"
-      debug:
-        msg: |
-          ════════════════════════════════════════════════════════════
-          STEP 1: NORMALIZING BA NUMBER
-          ════════════════════════════════════════════════════════════
-          Input BA Number: {{ ba_number }}
-          Normalized BA Number: {{ ba_number | upper | trim }}
-          ════════════════════════════════════════════════════════════
+parameters:
+  - name: ba_number
+    displayName: 'BA Number'
+    type: string
+    
+  - name: as_number
+    displayName: 'AS Number'
+    type: string
+    
+  - name: repository_url
+    displayName: 'Repository URL (format: github.com?owner=org&repo=reponame)'
+    type: string
+    
+  - name: group_name
+    displayName: 'Checkmarx Group Name'
+    type: string
 
-    - name: Set normalized BA number
-      set_fact:
-        ba_number_uc: "{{ ba_number | upper | trim }}"
+variables:
+  - group: checkmarx-credentials  # Variable group containing secrets
+  - name: checkmarx_base_url
+    value: 'https://cigna.cxone.cloud'
+  - name: ba_number_uc
+    value: ${{ upper(parameters.ba_number) }}
 
-    # --- STEP 2: AUTHENTICATE WITH CHECKMARX ONE ---
-    - name: "[SIMULATION] Authenticate with CheckmarxOne"
-      debug:
-        msg: |
-          ════════════════════════════════════════════════════════════
-          STEP 2: AUTHENTICATING WITH CHECKMARX ONE
-          ════════════════════════════════════════════════════════════
-          API Endpoint: {{ checkmarx_base_url | default('https://cigna.cxone.cloud') }}/identity/connect/token
-          Method: POST
-          Authentication Type: OAuth2 Client Credentials
-          Status: ✓ Authentication Successful (SIMULATED)
-          Access Token: eyJhbGciOiJSUzI1NiIsInR5cCI... (SIMULATED)
-          Token Expiry: {{ (ansible_date_time.epoch | int + 3600) }}
-          ════════════════════════════════════════════════════════════
+stages:
+  - stage: CheckmarxOnboarding
+    displayName: 'CheckmarxOne SAST Onboarding'
+    jobs:
+      - job: OnboardRepository
+        displayName: 'Onboard Repository to CheckmarxOne'
+        pool:
+          vmImage: 'ubuntu-latest'
+        
+        steps:
+          # STEP 1: Display Input Parameters
+          - task: Bash@3
+            displayName: '📋 Display Input Parameters'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "════════════════════════════════════════════════════════════"
+                echo "CHECKMARX ONE SAST ONBOARDING - INPUT PARAMETERS"
+                echo "════════════════════════════════════════════════════════════"
+                echo "BA Number: ${{ parameters.ba_number }}"
+                echo "BA Number (Uppercase): $(ba_number_uc)"
+                echo "AS Number: ${{ parameters.as_number }}"
+                echo "Repository: ${{ parameters.repository_url }}"
+                echo "Group Name: ${{ parameters.group_name }}"
+                echo "════════════════════════════════════════════════════════════"
 
-    # --- STEP 3: SEARCH FOR APPLICATION ---
-    - name: "[SIMULATION] Search for Application by BA Number"
-      debug:
-        msg: |
-          ════════════════════════════════════════════════════════════
-          STEP 3: SEARCHING FOR APPLICATION
-          ════════════════════════════════════════════════════════════
-          API Endpoint: /api/applications?name={{ ba_number_uc }}
-          Method: GET
-          Searching for: {{ ba_number_uc }}
-          Result: Application found (SIMULATED)
-          Application ID: app-{{ ba_number_uc | lower }}-simulated-id
-          Application Name: {{ ba_number_uc }}
-          Criticality: 3 (Medium)
-          ════════════════════════════════════════════════════════════
+          # STEP 2: Authenticate with CheckmarxOne
+          - task: Bash@3
+            displayName: '🔐 Authenticate with CheckmarxOne'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "════════════════════════════════════════════════════════════"
+                echo "STEP 2: AUTHENTICATING WITH CHECKMARX ONE"
+                echo "════════════════════════════════════════════════════════════"
+                echo "API Endpoint: $(checkmarx_base_url)/identity/connect/token"
+                echo "Method: POST"
+                echo "Authentication Type: OAuth2 Client Credentials"
+                
+                # Simulate API call (replace with actual curl in production)
+                echo ""
+                echo "🔄 Making authentication request..."
+                echo "✓ Authentication Successful (SIMULATED)"
+                echo "✓ Access Token: eyJhbGciOiJSUzI1NiIsInR5cCI... (SIMULATED)"
+                echo "✓ Token Expiry: 3600 seconds"
+                echo "════════════════════════════════════════════════════════════"
 
-    - name: Set simulated application ID
-      set_fact:
-        application_id: "app-{{ ba_number_uc | lower }}-simulated-id"
+          # STEP 3: Search for Application
+          - task: Bash@3
+            displayName: '🔍 Search for Application'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "════════════════════════════════════════════════════════════"
+                echo "STEP 3: SEARCHING FOR APPLICATION"
+                echo "════════════════════════════════════════════════════════════"
+                echo "API Endpoint: GET $(checkmarx_base_url)/api/applications?name=$(ba_number_uc)"
+                echo "Searching for: $(ba_number_uc)"
+                
+                # Simulate API call
+                echo ""
+                echo "🔄 Searching for application..."
+                echo "✓ Application Found (SIMULATED)"
+                echo "✓ Application ID: app-$(ba_number_uc)-simulated-id"
+                echo "✓ Application Name: $(ba_number_uc)"
+                echo "✓ Criticality: 3 (Medium)"
+                
+                # Export for later steps
+                echo "##vso[task.setvariable variable=application_id]app-$(ba_number_uc)-simulated-id"
+                echo "════════════════════════════════════════════════════════════"
 
-    # --- STEP 4: VALIDATE GROUP ---
-    - name: "[SIMULATION] Search for Group"
-      debug:
-        msg: |
-          ════════════════════════════════════════════════════════════
-          STEP 4: VALIDATING GROUP
-          ════════════════════════════════════════════════════════════
-          API Endpoint: /api/access-management/groups?name={{ group_name }}
-          Method: GET
-          Searching for: {{ group_name }}
-          Result: Group found (SIMULATED)
-          Group ID: group-{{ group_name | lower | regex_replace('[^a-z0-9]', '') }}-simulated-id
-          Group Name: {{ group_name }}
-          ════════════════════════════════════════════════════════════
+          # STEP 4: Validate Group
+          - task: Bash@3
+            displayName: '👥 Validate Group'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "════════════════════════════════════════════════════════════"
+                echo "STEP 4: VALIDATING GROUP"
+                echo "════════════════════════════════════════════════════════════"
+                echo "API Endpoint: GET $(checkmarx_base_url)/api/access-management/groups?name=${{ parameters.group_name }}"
+                echo "Searching for: ${{ parameters.group_name }}"
+                
+                # Simulate API call
+                echo ""
+                echo "🔄 Searching for group..."
+                echo "✓ Group Found (SIMULATED)"
+                echo "✓ Group ID: group-simulated-id-12345"
+                echo "✓ Group Name: ${{ parameters.group_name }}"
+                
+                # Export for later steps
+                echo "##vso[task.setvariable variable=group_id]group-simulated-id-12345"
+                echo "════════════════════════════════════════════════════════════"
 
-    - name: Set simulated group ID
-      set_fact:
-        group_id: "group-{{ group_name | lower | regex_replace('[^a-z0-9]', '') }}-simulated-id"
+          # STEP 5: Extract SCM Details
+          - task: Bash@3
+            displayName: '📦 Extract SCM Details'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "════════════════════════════════════════════════════════════"
+                echo "STEP 5: EXTRACTING SCM DETAILS"
+                echo "════════════════════════════════════════════════════════════"
+                echo "Input Repository: ${{ parameters.repository_url }}"
+                echo ""
+                
+                # Extract organization from query parameter
+                REPO_URL="${{ parameters.repository_url }}"
+                SCM_ORG=$(echo "$REPO_URL" | grep -oP 'owner=\K[^&]+')
+                REPO_NAME=$(echo "$REPO_URL" | grep -oP 'repo=\K[^&]+')
+                SCM_HOST=$(echo "$REPO_URL" | sed 's/?.*//; s|https\?://||')
+                
+                # Remove .git suffix if present
+                REPO_NAME=$(echo "$REPO_NAME" | sed 's/\.git$//')
+                
+                FULL_REPO_NAME="${SCM_ORG}/${REPO_NAME}"
+                FULL_REPO_URL="https://${SCM_HOST}/${SCM_ORG}/${REPO_NAME}"
+                
+                echo "Extracted Details:"
+                echo "- SCM Host: ${SCM_HOST}"
+                echo "- Organization: ${SCM_ORG}"
+                echo "- Repository: ${REPO_NAME}"
+                echo "- Full Repo Name: ${FULL_REPO_NAME}"
+                echo "- Full Repo URL: ${FULL_REPO_URL}"
+                
+                # Export for later steps
+                echo "##vso[task.setvariable variable=scm_org]${SCM_ORG}"
+                echo "##vso[task.setvariable variable=repo_name]${REPO_NAME}"
+                echo "##vso[task.setvariable variable=full_repo_name]${FULL_REPO_NAME}"
+                echo "##vso[task.setvariable variable=full_repo_url]${FULL_REPO_URL}"
+                echo "════════════════════════════════════════════════════════════"
 
-    # --- STEP 5: EXTRACT SCM DETAILS ---
-    - name: "[SIMULATION] Extract SCM Details"
-      debug:
-        msg: |
-          ════════════════════════════════════════════════════════════
-          STEP 5: EXTRACTING SCM DETAILS
-          ════════════════════════════════════════════════════════════
-          Input Repository: {{ repository }}
-          
-    - name: Extract SCM host
-      set_fact:
-        scm_host: "{{ (repository.split('?')[0]) | regex_replace('^https?://', '') | trim }}"
+          # STEP 6: Check if Project Exists
+          - task: Bash@3
+            displayName: '🔎 Check if Project Exists'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "════════════════════════════════════════════════════════════"
+                echo "STEP 6: CHECKING IF PROJECT EXISTS"
+                echo "════════════════════════════════════════════════════════════"
+                echo "API Endpoint: GET $(checkmarx_base_url)/api/projects?name=$(full_repo_name)"
+                echo "Searching for: $(full_repo_name)"
+                
+                # Simulate API call
+                echo ""
+                echo "🔄 Searching for project..."
+                echo "✓ Project NOT Found (SIMULATED)"
+                echo "✓ Will proceed with project creation"
+                
+                # Export project exists flag
+                echo "##vso[task.setvariable variable=project_exists]false"
+                echo "════════════════════════════════════════════════════════════"
 
-    # Extract organization name from query-parameter formatted repository URL (e.g., github.com?owner=myorg&repo=myrepo)
-    - name: Extract SCM org (query-param style)
-      set_fact:
-        scm_org: >-
-          {% set match = repository | regex_findall('owner=([^&]+)') %}
-          {{ (match[0] if match | length > 0 else 'unknown-org') | trim }}
+          # STEP 7: Create Project
+          - task: Bash@3
+            displayName: '➕ Create Project in CheckmarxOne'
+            condition: eq(variables['project_exists'], 'false')
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "════════════════════════════════════════════════════════════"
+                echo "STEP 7: CREATING NEW PROJECT"
+                echo "════════════════════════════════════════════════════════════"
+                echo "API Endpoint: POST $(checkmarx_base_url)/api/projects"
+                echo ""
+                echo "Request Body:"
+                echo "  name: $(full_repo_name)"
+                echo "  groups: [$(group_id)]"
+                echo "  repoUrl: $(full_repo_url)"
+                echo "  mainBranch: main"
+                echo "  origin: Azure-DevOps-Pipeline"
+                echo "  tags:"
+                echo "    application: $(ba_number_uc)"
+                echo "    asNumber: ${{ parameters.as_number }}"
+                echo "    scmConnected: true"
+                echo "  criticality: 3"
+                echo ""
+                
+                # Simulate API call
+                echo "🔄 Creating project..."
+                PROJECT_ID="project-simulated-id-67890"
+                PROJECT_URL="$(checkmarx_base_url)/projects/${PROJECT_ID}/overview"
+                
+                echo "✓ Project Created Successfully (SIMULATED)"
+                echo "✓ Project ID: ${PROJECT_ID}"
+                echo "✓ Project URL: ${PROJECT_URL}"
+                
+                # Export project details
+                echo "##vso[task.setvariable variable=project_id]${PROJECT_ID}"
+                echo "##vso[task.setvariable variable=project_url]${PROJECT_URL}"
+                echo "##vso[task.setvariable variable=onboarding_status]created"
+                echo "════════════════════════════════════════════════════════════"
 
-    - name: Extract repo only (query-param style)
-      set_fact:
-        repo_only: >-
-          {% set match = repository | regex_findall('repo=([^&]+)') %}
-          {{ (match[0] if match | length > 0 else 'unknown-repo') | trim }}
+          # STEP 8: Display Summary
+          - task: Bash@3
+            displayName: '📊 Onboarding Summary'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "════════════════════════════════════════════════════════════"
+                echo "CHECKMARX ONE SAST ONBOARDING - SUMMARY"
+                echo "════════════════════════════════════════════════════════════"
+                echo ""
+                echo "Input Parameters:"
+                echo "✓ BA Number: $(ba_number_uc)"
+                echo "✓ AS Number: ${{ parameters.as_number }}"
+                echo "✓ Repository: $(full_repo_name)"
+                echo "✓ Group: ${{ parameters.group_name }}"
+                echo ""
+                echo "Simulated API Calls Made:"
+                echo "1. POST /identity/connect/token (Authentication)"
+                echo "2. GET  /api/applications?name=$(ba_number_uc)"
+                echo "3. GET  /api/access-management/groups?name=${{ parameters.group_name }}"
+                echo "4. GET  /api/projects?name=$(full_repo_name)"
+                echo "5. POST /api/projects (Project Creation)"
+                echo ""
+                echo "Results (SIMULATED):"
+                echo "✓ Application ID: $(application_id)"
+                echo "✓ Group ID: $(group_id)"
+                echo "✓ Project ID: $(project_id)"
+                echo "✓ Project URL: $(project_url)"
+                echo "✓ Onboarding Status: $(onboarding_status)"
+                echo ""
+                echo "Next Steps (In Production):"
+                echo "- Project would be created in CheckmarxOne"
+                echo "- Automatic scan would be triggered"
+                echo "- Email notifications would be sent"
+                echo "- Project would appear in CheckmarxOne console"
+                echo ""
+                echo "⚠️  THIS WAS A SIMULATION - No actual API calls were made"
+                echo "════════════════════════════════════════════════════════════"
 
-    - name: Fallback org/repo from path style if missing
-      set_fact:
-        scm_org: "{{ repository.split('/')[-2] | trim }}"
-        repo_only: "{{ repository.split('/')[-1] | trim }}"
-      when: scm_org == 'unknown-org' or repo_only == 'unknown-repo'
+          # STEP 9: Simulate Email Notification
+          - task: Bash@3
+            displayName: '📧 Email Notification (Simulated)'
+            inputs:
+              targetType: 'inline'
+              script: |
+                echo "════════════════════════════════════════════════════════════"
+                echo "EMAIL NOTIFICATION (SIMULATED)"
+                echo "════════════════════════════════════════════════════════════"
+                echo "To: stakeholders@company.com"
+                echo "From: no-reply@cigna.com"
+                echo "Subject: CheckmarxOne SAST Onboarding - Project Created"
+                echo ""
+                echo "Body:"
+                echo "Dear Stakeholder,"
+                echo ""
+                echo "Your repository '$(full_repo_name)' has been successfully"
+                echo "onboarded to CheckmarxOne ($(ba_number_uc))."
+                echo ""
+                echo "Project URL: $(project_url)"
+                echo ""
+                echo "Thank you,"
+                echo "Product Security Team"
+                echo "════════════════════════════════════════════════════════════"
 
-    - name: Normalize repo name (strip .git)
-      set_fact:
-        repo_only: "{{ repo_only | regex_replace('\\.git$', '') }}"
-
-    - name: Build normalized repo name and full URL
-      set_fact:
-        repo_name: "{{ scm_org | trim }}/{{ repo_only | trim }}"
-        full_repo_url: "https://{{ scm_host | trim }}/{{ scm_org | trim }}/{{ repo_only | trim }}"
-
-    - name: "[SIMULATION] Display Extracted SCM Details"
-      debug:
-        msg: |
-          Extracted SCM Details:
-          - SCM Host: {{ scm_host }}
-          - Organization: {{ scm_org }}
-          - Repository: {{ repo_only }}
-          - Full Repo Name: {{ repo_name }}
-          - Full Repo URL: {{ full_repo_url }}
-          ════════════════════════════════════════════════════════════
-
-    # --- STEP 6: CHECK IF PROJECT EXISTS ---
-    - name: "[SIMULATION] Search for Project"
-      debug:
-        msg: |
-          ════════════════════════════════════════════════════════════
-          STEP 6: CHECKING IF PROJECT EXISTS
-          ════════════════════════════════════════════════════════════
-          API Endpoint: /api/projects?name={{ repo_name }}
-          Method: GET
-          Searching for: {{ repo_name }}
-          Result: Project NOT found - Will create new project (SIMULATED)
-          ════════════════════════════════════════════════════════════
-
-    # --- STEP 7: CREATE PROJECT ---
-    - name: "[SIMULATION] Create New Project"
-      debug:
-        msg: |
-          ════════════════════════════════════════════════════════════
-          STEP 7: CREATING NEW PROJECT
-          ════════════════════════════════════════════════════════════
-          API Endpoint: /api/projects
-          Method: POST
-          
-          Request Body:
-            name: {{ repo_name }}
-            groups: [{{ group_id }}]
-            repoUrl: {{ full_repo_url }}
-            mainBranch: main
-            origin: Azure-DevOps-POC
-            tags:
-              application: {{ ba_number_uc }}
-              asNumber: {{ as_number }}
-              scmConnected: true
-            criticality: 3
-          
-          Response (SIMULATED):
-            Project ID: project-{{ repo_name | lower | regex_replace('[^a-z0-9]', '-') }}-simulated-id
-            Status: Created ✓
-            Project URL: https://cigna.cxone.cloud/projects/project-{{ repo_name | lower | regex_replace('[^a-z0-9]', '-') }}-simulated-id/overview
-          ════════════════════════════════════════════════════════════
-
-    - name: Set simulated project ID
-      set_fact:
-        project_id: "project-{{ repo_name | lower | regex_replace('[^a-z0-9]', '-') }}-simulated-id"
-        project_url: "https://cigna.cxone.cloud/projects/project-{{ repo_name | lower | regex_replace('[^a-z0-9]', '-') }}-simulated-id/overview"
-
-    # --- STEP 8: FINAL SUMMARY ---
-    - name: "[SIMULATION] Onboarding Summary"
-      debug:
-        msg: |
-          ════════════════════════════════════════════════════════════
-          CHECKMARX ONE SAST ONBOARDING - SIMULATION COMPLETE
-          ════════════════════════════════════════════════════════════
-          
-          Input Parameters:
-          ✓ BA Number: {{ ba_number_uc }}
-          ✓ AS Number: {{ as_number }}
-          ✓ Repository: {{ repo_name }}
-          ✓ Group: {{ group_name }}
-          
-          Simulated API Calls Made:
-          1. POST /identity/connect/token (Authentication)
-          2. GET  /api/applications?name={{ ba_number_uc }} (Application Search)
-          3. GET  /api/access-management/groups?name={{ group_name }} (Group Search)
-          4. GET  /api/projects?name={{ repo_name }} (Project Search)
-          5. POST /api/projects (Project Creation)
-          
-          Results (SIMULATED):
-          ✓ Application ID: {{ application_id }}
-          ✓ Group ID: {{ group_id }}
-          ✓ Project ID: {{ project_id }}
-          ✓ Project URL: {{ project_url }}
-          ✓ Onboarding Status: SUCCESS
-          
-          Next Steps (In Production):
-          - Project would be created in CheckmarxOne
-          - Automatic scan would be triggered
-          - Email notifications would be sent
-          - Project would appear in CheckmarxOne console
-          
-          This was a SIMULATION - No actual API calls were made.
-          ════════════════════════════════════════════════════════════
-
-    # --- STEP 9: SIMULATE EMAIL NOTIFICATION ---
-    - name: "[SIMULATION] Email Notification"
-      debug:
-        msg: |
-          ════════════════════════════════════════════════════════════
-          EMAIL NOTIFICATION (SIMULATED)
-          ════════════════════════════════════════════════════════════
-          To: stakeholders@company.com
-          From: no-reply@cigna.com
-          Subject: CheckmarxOne SAST Onboarding - Project Created Successfully
-          
-          Body:
-          Dear Stakeholder,
-          
-          Your repository "{{ repo_name }}" has been successfully 
-          onboarded to CheckmarxOne ({{ ba_number_uc }}).
-          
-          You can check scan status here:
-          {{ project_url }}
-          
-          Thank you,
-          Product Security Team
-          ════════════════════════════════════════════════════════════
+          # STEP 10: Publish Results (Optional)
+          - task: PublishBuildArtifacts@1
+            displayName: '📤 Publish Onboarding Results'
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+              ArtifactName: 'checkmarx-onboarding-results'
